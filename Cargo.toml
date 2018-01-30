@@ -1,0 +1,11 @@
+[package]
+name = "combustion_r"
+version = "0.1.0"
+authors = ["002"]
+
+[dependencies]
+tritium = {git="https://github.com/Halogen002/Tritium", branch="0.6.0"}
+byteorder = "*"
+
+[lib]
+crate-type = ["staticlib"]

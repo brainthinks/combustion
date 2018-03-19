@@ -6,13 +6,15 @@ extern crate byteorder;
 use byteorder::{ByteOrder,LittleEndian};
 
 #[no_mangle]
-pub unsafe extern "C" fn convert_map_cd(buffer : *mut u8, buffer_len : usize,
-    map_data_raw : *const u8, map_data_len : usize,
-    multiplayer_raw : *const u8, multiplayer_len : usize,
-    bitmaps_pc_raw : *const u8, bitmaps_pc_len : usize,
-    bitmaps_ce_raw : *const u8, bitmaps_ce_len : usize,
-    sounds_pc_raw : *const u8, sounds_pc_len : usize,
-    sounds_ce_raw : *const u8, sounds_ce_len : usize) -> usize {
+pub unsafe extern "C" fn convert_map_cd(
+    buffer : *mut u8,               buffer_len : usize,
+    map_data_raw : *const u8,       map_data_len : usize,
+    multiplayer_raw : *const u8,    multiplayer_len : usize,
+    bitmaps_pc_raw : *const u8,     bitmaps_pc_len : usize,
+    bitmaps_ce_raw : *const u8,     bitmaps_ce_len : usize,
+    sounds_pc_raw : *const u8,      sounds_pc_len : usize,
+    sounds_ce_raw : *const u8,      sounds_ce_len : usize
+) -> usize {
     use std::slice::{from_raw_parts, from_raw_parts_mut};
     let map_data = from_raw_parts(map_data_raw, map_data_len);
     let multiplayer = from_raw_parts(multiplayer_raw, multiplayer_len);
@@ -30,14 +32,26 @@ pub unsafe extern "C" fn convert_map_cd(buffer : *mut u8, buffer_len : usize,
     else {
         Some(from_raw_parts(sounds_ce_raw, sounds_ce_len))
     };
+
+    // Debugging
+    println!("Received map_data_len of {}...", map_data_len);
+    println!("Received multiplayer_len of {}...", multiplayer_len);
+    println!("Received bitmaps_pc_len of {}...", bitmaps_pc_len);
+    println!("Received bitmaps_ce_len of {}...", bitmaps_ce_len);
+    println!("Received sounds_pc_len of {}...", sounds_pc_len);
+    println!("Received sounds_ce_len of {}...", sounds_ce_len);
+    println!("about to convert map...");
+
     match convert_map(map_data,multiplayer,bitmaps_pc,sounds_pc,bitmaps_ce,sounds_ce) {
         Ok(n) => {
-            if n.len() > buffer_len {
+            let l = n.len();
+            if l > buffer_len {
+                println!("Success! {}", l);
                 0
             }
             else {
+                println!("Warning: return value not greater than buffer length...");
                 let b = from_raw_parts_mut(buffer, buffer_len);
-                let l = n.len();
                 for i in 0..n.len() {
                     b[i] = n[i];
                 }
@@ -45,17 +59,22 @@ pub unsafe extern "C" fn convert_map_cd(buffer : *mut u8, buffer_len : usize,
             }
         },
         Err(_) => {
+            println!("Error!");
             0
         }
     }
 }
 
 fn convert_map(map_data : &[u8], multiplayer : &[u8], bitmaps_pc : &[u8], sounds_pc : &[u8], bitmaps_ce : Option<&[u8]>, sounds_ce : Option<&[u8]>) -> Result<Vec<u8>,&'static str> {
-    let multiplayer = try!(Map::from_cache_file(&multiplayer));
     let mut map = try!(Map::from_cache_file(&map_data));
-    let scenario_type = &multiplayer.tag_array.tags()[multiplayer.tag_array.find_tag("ui\\ui_tags_loaded_multiplayer_scenario_type",0x74616763).unwrap()];
-    for i in scenario_type.references(&multiplayer.tag_array) {
-        let _ = map.tag_array.insert_recursive(&multiplayer.tag_array, i.tag_index);
+
+    // @todo - temporary until I know what needs to be passed for multiplayer...
+    if multiplayer.len() > 0 {
+        let multiplayer = try!(Map::from_cache_file(&multiplayer));
+        let scenario_type = &multiplayer.tag_array.tags()[multiplayer.tag_array.find_tag("ui\\ui_tags_loaded_multiplayer_scenario_type",0x74616763).unwrap()];
+        for i in scenario_type.references(&multiplayer.tag_array) {
+            let _ = map.tag_array.insert_recursive(&multiplayer.tag_array, i.tag_index);
+        }
     }
 
     let bitmaps_ce_map_o = match bitmaps_ce {

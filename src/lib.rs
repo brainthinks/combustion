@@ -1,9 +1,35 @@
-extern crate tritium;//C:/Program Files (x86)/Microsoft Games/Halo/MAPS/bloodgulch.map
+//! # Combustion
+//!
+//! `libcombustion_r` is a library that will allow you convert a Halo PC map to
+//! work with Halo CE.
+
+extern crate tritium;
 use tritium::map::*;
 use tritium::resource_map::*;
 
 extern crate byteorder;
 use byteorder::{ByteOrder,LittleEndian};
+
+/// This is the function that is exposed by the compiled library that will convert a map.
+///
+/// See the "examples" folder for using this with Python3.
+///
+/// # Arguments
+///
+/// * `buffer` - the writable buffer (pointer) to write the converted map data to
+/// * `buffer_len` - @todo - should this always be passed as zero?
+/// * `map_data_raw` - the read-only buffer for the Halo PC map file
+/// * `map_data_len` - the number of bytes in the `map_data_raw` buffer
+/// * `multiplayer_raw` - @todo - ???
+/// * `multiplayer_len` - @todo - the number of bytes in the `multiplayer_raw` buffer
+/// * `bitmaps_pc_raw` - the read-only buffer for the Halo PC bitmaps.map file
+/// * `bitmaps_pc_len` - the number of bytes in the `bitmaps_pc_raw` buffer
+/// * `bitmaps_ce_raw` - the read-only buffer for the Halo CE bitmaps.map file
+/// * `bitmaps_ce_len` - the number of bytes in the `bitmaps_ce_raw` buffer
+/// * `sounds_pc_raw` - the read-only buffer for the Halo PC sounds.map file
+/// * `sounds_pc_len` - the number of bytes in the `sounds_pc_raw` buffer
+/// * `sounds_ce_raw` - the read-only buffer for the Halo CE sounds.map file
+/// * `sounds_ce_len` - the number of bytes in the `sounds_ce_raw` buffer
 
 #[no_mangle]
 pub unsafe extern "C" fn convert_map_cd(

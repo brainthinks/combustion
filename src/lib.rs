@@ -10,9 +10,72 @@ use tritium::resource_map::*;
 extern crate byteorder;
 use byteorder::{ByteOrder,LittleEndian};
 
-/// This is the function that is exposed by the compiled library that will convert a map.
+/// Get the length of the resulting converted map file.  Useful for allocating
+/// a properly sized buffer.
 ///
-/// See the "examples" folder for using this with Python3.
+/// # Arguments
+///
+/// * `map_data_raw` - the read-only buffer for the Halo PC map file
+/// * `map_data_len` - the number of bytes in the `map_data_raw` buffer
+/// * `multiplayer_raw` - @todo - ???
+/// * `multiplayer_len` - @todo - the number of bytes in the `multiplayer_raw` buffer
+/// * `bitmaps_pc_raw` - the read-only buffer for the Halo PC bitmaps.map file
+/// * `bitmaps_pc_len` - the number of bytes in the `bitmaps_pc_raw` buffer
+/// * `bitmaps_ce_raw` - the read-only buffer for the Halo CE bitmaps.map file
+/// * `bitmaps_ce_len` - the number of bytes in the `bitmaps_ce_raw` buffer
+/// * `sounds_pc_raw` - the read-only buffer for the Halo PC sounds.map file
+/// * `sounds_pc_len` - the number of bytes in the `sounds_pc_raw` buffer
+/// * `sounds_ce_raw` - the read-only buffer for the Halo CE sounds.map file
+/// * `sounds_ce_len` - the number of bytes in the `sounds_ce_raw` buffer
+
+#[no_mangle]
+pub unsafe extern "C" fn convert_map_cd_len(
+    map_data_raw : *const u8,       map_data_len : usize,
+    multiplayer_raw : *const u8,    multiplayer_len : usize,
+    bitmaps_pc_raw : *const u8,     bitmaps_pc_len : usize,
+    bitmaps_ce_raw : *const u8,     bitmaps_ce_len : usize,
+    sounds_pc_raw : *const u8,      sounds_pc_len : usize,
+    sounds_ce_raw : *const u8,      sounds_ce_len : usize
+) -> usize {
+    use std::slice::{from_raw_parts};
+    let map_data = from_raw_parts(map_data_raw, map_data_len);
+    let multiplayer = from_raw_parts(multiplayer_raw, multiplayer_len);
+    let bitmaps_pc = from_raw_parts(bitmaps_pc_raw, bitmaps_pc_len);
+    let sounds_pc = from_raw_parts(sounds_pc_raw, sounds_pc_len);
+    let bitmaps_ce = if bitmaps_ce_len == 0 {
+        None
+    }
+    else {
+        Some(from_raw_parts(bitmaps_ce_raw, bitmaps_ce_len))
+    };
+    let sounds_ce = if sounds_ce_len == 0 {
+        None
+    }
+    else {
+        Some(from_raw_parts(sounds_ce_raw, sounds_ce_len))
+    };
+
+    // Debugging
+    println!("Received map_data_len of {}...", map_data_len);
+    println!("Received multiplayer_len of {}...", multiplayer_len);
+    println!("Received bitmaps_pc_len of {}...", bitmaps_pc_len);
+    println!("Received bitmaps_ce_len of {}...", bitmaps_ce_len);
+    println!("Received sounds_pc_len of {}...", sounds_pc_len);
+    println!("Received sounds_ce_len of {}...", sounds_ce_len);
+
+    match convert_map_get_len(map_data, multiplayer, bitmaps_pc, sounds_pc, bitmaps_ce, sounds_ce) {
+        Ok(converted_map_len) => {
+            println!("The converted map length will be exactly {} bytes.", converted_map_len);
+            converted_map_len
+        },
+        Err(_) => {
+            println!("Error!");
+            0
+        }
+    }
+}
+
+/// Convert a retial Halo PC map file to a map file that is compatible with Halo CE.
 ///
 /// # Arguments
 ///
@@ -26,10 +89,10 @@ use byteorder::{ByteOrder,LittleEndian};
 /// * `bitmaps_pc_len` - the number of bytes in the `bitmaps_pc_raw` buffer
 /// * `bitmaps_ce_raw` - the read-only buffer for the Halo CE bitmaps.map file
 /// * `bitmaps_ce_len` - the number of bytes in the `bitmaps_ce_raw` buffer
-/// * `sounds_pc_raw` - the read-only buffer for the Halo PC sounds.map file
-/// * `sounds_pc_len` - the number of bytes in the `sounds_pc_raw` buffer
-/// * `sounds_ce_raw` - the read-only buffer for the Halo CE sounds.map file
-/// * `sounds_ce_len` - the number of bytes in the `sounds_ce_raw` buffer
+/// * `sounds_pc_raw` - Optional - the read-only buffer for the Halo PC sounds.map file
+/// * `sounds_pc_len` - Optional - the number of bytes in the `sounds_pc_raw` buffer
+/// * `sounds_ce_raw` - Optional - the read-only buffer for the Halo CE sounds.map file
+/// * `sounds_ce_len` - Optional - the number of bytes in the `sounds_ce_raw` buffer
 
 #[no_mangle]
 pub unsafe extern "C" fn convert_map_cd(
@@ -68,21 +131,25 @@ pub unsafe extern "C" fn convert_map_cd(
     println!("Received sounds_ce_len of {}...", sounds_ce_len);
     println!("about to convert map...");
 
-    match convert_map(map_data,multiplayer,bitmaps_pc,sounds_pc,bitmaps_ce,sounds_ce) {
-        Ok(n) => {
-            let l = n.len();
-            if l > buffer_len {
-                println!("Success! {}", l);
+    match convert_map(map_data, multiplayer, bitmaps_pc, sounds_pc, bitmaps_ce, sounds_ce) {
+        Ok(converted_map) => {
+            let converted_map_len = converted_map.len();
+
+            if converted_map_len > buffer_len || converted_map_len < buffer_len {
+                println!("Error! The converted map file size is {}, but the buffer length you passed is {}.  Set your buffer size to the return value of convert_map_cd_len.", converted_map_len, buffer_len);
                 0
-            }
-            else {
-                println!("Warning: return value not greater than buffer length...");
+            } else {
+                println!("About to write {} bytes to a buffer with {} bytes...", converted_map_len, buffer_len);
+
                 let b = from_raw_parts_mut(buffer, buffer_len);
-                for i in 0..n.len() {
-                    b[i] = n[i];
+                for i in 0..converted_map_len {
+                    b[i] = converted_map[i];
                 }
-                l
+
+                println!("Success!");
+                converted_map_len
             }
+
         },
         Err(_) => {
             println!("Error!");
@@ -91,7 +158,28 @@ pub unsafe extern "C" fn convert_map_cd(
     }
 }
 
-fn convert_map(map_data : &[u8], multiplayer : &[u8], bitmaps_pc : &[u8], sounds_pc : &[u8], bitmaps_ce : Option<&[u8]>, sounds_ce : Option<&[u8]>) -> Result<Vec<u8>,&'static str> {
+fn convert_map_get_len(
+    map_data : &[u8],
+    multiplayer : &[u8],
+    bitmaps_pc : &[u8],
+    sounds_pc : &[u8],
+    bitmaps_ce : Option<&[u8]>,
+    sounds_ce : Option<&[u8]>,
+) -> Result<usize,&'static str> {
+    match convert_map(map_data, multiplayer, bitmaps_pc, sounds_pc, bitmaps_ce, sounds_ce) {
+        Ok(converted_map) => Ok(converted_map.len()),
+        Err(err) => Err(err),
+    }
+}
+
+fn convert_map(
+    map_data : &[u8],
+    multiplayer : &[u8],
+    bitmaps_pc : &[u8],
+    sounds_pc : &[u8],
+    bitmaps_ce : Option<&[u8]>,
+    sounds_ce : Option<&[u8]>,
+) -> Result<Vec<u8>,&'static str> {
     let mut map = try!(Map::from_cache_file(&map_data));
 
     // @todo - temporary until I know what needs to be passed for multiplayer...
